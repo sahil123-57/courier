@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Scanner</title>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 12px; }
+    select, button { font-size: 18px; padding: 10px; width: 100%; margin-bottom: 10px; }
+    #msg { padding: 14px; font-size: 18px; border-radius: 6px; margin-top: 10px; }
+    .ok { background: #d4f5d4; }
+    .bad { background: #fbd5d5; }
+  </style>
+</head>
+<body>
+  <select id="type">
+    <option value="pickup">Pickup</option>
+    <option value="hub_in">Hub - scan in</option>
+    <option value="hub_out">Hub - scan out</option>
+    <option value="deliver">Delivered</option>
+  </select>
+  <div id="reader"></div>
+  <div id="msg"></div>
+
+  <script>
+    var csrf = "{{ csrf_token }}";
+    var busy = false;
+
+    function show(text, good) {
+      var el = document.getElementById("msg");
+      el.textContent = text;
+      el.className = good ? "ok" : "bad";
+    }
+
+    async function onScan(text) {
+      if (busy) return;
+      busy = true;
+      var res = await fetch("/api/method/courier.api.scan_parcel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": csrf },
+        body: JSON.stringify({ token: text, scan_type: document.getElementById("type").value }),
+      });
+      var data = await res.json();
+      if (res.ok) {
+        var r = data.message;
+        show(r.parcel + ": " + r.status + (r.duplicate ? " (already scanned)" : ""), true);
+      } else {
+        var err = "Rejected";
+        try { err = JSON.parse(JSON.parse(data._server_messages)[0]).message; } catch (e) {}
+        show(err, false);
+      }
+      setTimeout(function () { busy = false; }, 2000);
+    }
+
+    new Html5Qrcode("reader").start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      onScan
+    );
+  </script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+{
+ "actions": [],
+ "autoname": "format:RATE-{####}",
+ "creation": "2026-11-16 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "origin_city",
+  "destination_city",
+  "service_level",
+  "base_price",
+  "price_per_kg"
+ ],
+ "fields": [
+  {
+   "fieldname": "origin_city",
+   "fieldtype": "Data",
+   "label": "Origin City",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "destination_city",
+   "fieldtype": "Data",
+   "label": "Destination City",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "service_level",
+   "fieldtype": "Select",
+   "label": "Service Level",
+   "options": "Standard\nExpress",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "base_price",
+   "fieldtype": "Currency",
+   "label": "Base Price",
+   "reqd": 1
+  },
+  {
+   "fieldname": "price_per_kg",
+   "fieldtype": "Currency",
+   "label": "Price Per Kg",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Courier",
+ "name": "Shipping Rate",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Courier Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "email": 1,
+   "print": 1,
+   "share": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "email": 1,
+   "print": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

@@ -1,0 +1,191 @@
+{
+ "actions": [],
+ "autoname": "format:PCL-{#####}",
+ "creation": "2026-11-16 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sender_name",
+  "sender_phone",
+  "sender_address",
+  "origin_city",
+  "recipient_name",
+  "recipient_phone",
+  "recipient_address",
+  "destination_city",
+  "weight_kg",
+  "service_level",
+  "amount",
+  "direction",
+  "status",
+  "origin_hub",
+  "destination_hub",
+  "payment_status",
+  "razorpay_order_id",
+  "razorpay_payment_id",
+  "booking_key",
+  "token"
+ ],
+ "fields": [
+  {
+   "fieldname": "sender_name",
+   "fieldtype": "Data",
+   "label": "Sender Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "sender_phone",
+   "fieldtype": "Data",
+   "label": "Sender Phone"
+  },
+  {
+   "fieldname": "sender_address",
+   "fieldtype": "Small Text",
+   "label": "Sender Address"
+  },
+  {
+   "fieldname": "origin_city",
+   "fieldtype": "Data",
+   "label": "Origin City",
+   "reqd": 1
+  },
+  {
+   "fieldname": "recipient_name",
+   "fieldtype": "Data",
+   "label": "Recipient Name",
+   "reqd": 1
+  },
+  {
+   "fieldname": "recipient_phone",
+   "fieldtype": "Data",
+   "label": "Recipient Phone"
+  },
+  {
+   "fieldname": "recipient_address",
+   "fieldtype": "Small Text",
+   "label": "Recipient Address"
+  },
+  {
+   "fieldname": "destination_city",
+   "fieldtype": "Data",
+   "label": "Destination City",
+   "reqd": 1
+  },
+  {
+   "fieldname": "weight_kg",
+   "fieldtype": "Float",
+   "label": "Weight Kg",
+   "reqd": 1
+  },
+  {
+   "fieldname": "service_level",
+   "fieldtype": "Select",
+   "label": "Service Level",
+   "options": "Standard\nExpress",
+   "default": "Standard"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "read_only": 1
+  },
+  {
+   "fieldname": "direction",
+   "fieldtype": "Select",
+   "label": "Direction",
+   "options": "Forward\nReturn",
+   "default": "Forward",
+   "read_only": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Data",
+   "label": "Status",
+   "default": "Unpaid",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "origin_hub",
+   "fieldtype": "Link",
+   "label": "Origin Hub",
+   "options": "Hub",
+   "read_only": 1
+  },
+  {
+   "fieldname": "destination_hub",
+   "fieldtype": "Link",
+   "label": "Destination Hub",
+   "options": "Hub",
+   "read_only": 1
+  },
+  {
+   "fieldname": "payment_status",
+   "fieldtype": "Select",
+   "label": "Payment Status",
+   "options": "Unpaid\nPaid",
+   "default": "Unpaid",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "razorpay_order_id",
+   "fieldtype": "Data",
+   "label": "Razorpay Order Id",
+   "read_only": 1
+  },
+  {
+   "fieldname": "razorpay_payment_id",
+   "fieldtype": "Data",
+   "label": "Razorpay Payment Id",
+   "read_only": 1
+  },
+  {
+   "fieldname": "booking_key",
+   "fieldtype": "Data",
+   "label": "Booking Key",
+   "read_only": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "token",
+   "fieldtype": "Data",
+   "label": "Token",
+   "read_only": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-11-16 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Courier",
+ "name": "Parcel",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "Courier Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
