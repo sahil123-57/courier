@@ -12,18 +12,22 @@ def create_order(parcel):
     if parcel.razorpay_order_id:
         return parcel.razorpay_order_id
 
-    res = requests.post(
-        "https://api.razorpay.com/v1/orders",
-        auth=(frappe.conf.get("razorpay_key_id"), frappe.conf.get("razorpay_key_secret")),
-        json={
-            "amount": int(parcel.amount * 100),
-            "currency": "INR",
-            "receipt": parcel.name,
-        },
-        timeout=20,
-    )
-    res.raise_for_status()
-    order = res.json()
+    if not frappe.conf.get("razorpay_key_id") and frappe.conf.get("developer_mode"):
+        # no keys on a dev site, make a fake order so the flow can still be shown
+        order = {"id": "order_sim_" + frappe.generate_hash(length=10), "simulated": True}
+    else:
+        res = requests.post(
+            "https://api.razorpay.com/v1/orders",
+            auth=(frappe.conf.get("razorpay_key_id"), frappe.conf.get("razorpay_key_secret")),
+            json={
+                "amount": int(parcel.amount * 100),
+                "currency": "INR",
+                "receipt": parcel.name,
+            },
+            timeout=20,
+        )
+        res.raise_for_status()
+        order = res.json()
 
     frappe.get_doc(
         {

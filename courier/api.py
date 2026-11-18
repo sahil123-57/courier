@@ -146,3 +146,13 @@ def ops_action(name, action, reason=""):
         frappe.throw("Only ops can do this", frappe.PermissionError)
     scan.ops_action(name, action, reason)
     return scan.current_status(name)
+
+
+@frappe.whitelist()
+def dev_simulate_payment(name):
+    # development only, stands in for the razorpay webhook
+    if not frappe.conf.get("developer_mode"):
+        frappe.throw("Only available in developer mode")
+    parcel = my_parcel(name)
+    payment.mark_paid(parcel.razorpay_order_id, "pay_simulated")
+    return "ok"
