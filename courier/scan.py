@@ -4,6 +4,10 @@ from courier import state_machine
 from courier.signing import read_token
 from courier.state_machine import ScanError
 
+FAILABLE = ("Out for Delivery", "Return Out for Delivery")
+HOLDABLE = ("In at Origin Hub", "In at Destination Hub",
+            "Return In at Pickup Hub", "Return In at Drop Hub")
+
 
 def get_secret():
     secret = frappe.conf.get("courier_secret")
@@ -24,8 +28,13 @@ def current_status(parcel_name):
     return last[0].status if last else "Unpaid"
 
 
-def add_event(parcel, scan_type, status, hub=None, proof=None):
+def add_event(parcel, scan_type, status, hub=None, proof=None, note=None, unique=False):
     seq = frappe.db.count("Scan Event", {"parcel": parcel.name}) + 1
+    key = f"{parcel.name}:{status}"
+    if unique:
+        # exceptions can repeat (fail, retry, fail again), so the key needs the seq
+        key = f"{key}:{seq}"
+
     frappe.get_doc(
         {
             "doctype": "Scan Event",
@@ -36,7 +45,8 @@ def add_event(parcel, scan_type, status, hub=None, proof=None):
             "hub": hub,
             "scanned_by": frappe.session.user,
             "proof": proof,
-            "scan_key": f"{parcel.name}:{status}",
+            "note": note,
+            "scan_key": key,
         }
     ).insert(ignore_permissions=True)
     parcel.db_set("status", status)
@@ -82,3 +92,31 @@ def start_return(parcel_name, user):
     parcel.db_set("direction", "Return")
     add_event(parcel, "return_request", "Return Requested")
     return parcel.name
+
+
+def status_before_last(parcel_name):
+    last_two = frappe.get_all(
+        "Scan Event",
+        filters={"parcel": parcel_name},
+        fields=["status"],
+        order_by="seq desc",
+        limit=2,
+    )
+    return last_two[1].status
+
+
+def ops_action(parcel_name, action, reason=""):
+    # used by ops from Desk, still goes through the log
+    parcel = frappe.get_doc("Parcel", parcel_name, for_update=True)
+    status = current_status(parcel.name)
+
+    if action == "fail_delivery" and status in FAILABLE:
+        new_status = "Delivery Failed"
+    elif action == "hold" and status in HOLDABLE:
+        new_status = "On Hold"
+    elif action == "resume" and status in ("Delivery Failed", "On Hold"):
+        new_status = status_before_last(parcel.name)
+    else:
+        frappe.throw(f"Cannot do '{action}' while the parcel is '{status}'")
+
+    add_event(parcel, action, new_status, note=reason, unique=True)

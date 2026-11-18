@@ -12,7 +12,8 @@
   "hub",
   "scanned_by",
   "scan_key",
-  "proof"
+  "proof",
+  "note"
  ],
  "fields": [
   {
@@ -67,6 +68,12 @@
    "fieldname": "proof",
    "fieldtype": "Attach",
    "label": "Proof",
+   "read_only": 1
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note",
    "read_only": 1
   }
  ],

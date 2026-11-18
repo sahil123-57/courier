@@ -118,7 +118,12 @@ def scan_parcel(token, scan_type, proof=None):
         frappe.throw("Only delivery agents can scan", frappe.PermissionError)
 
     # hub comes from the agent's own record, not from the phone
-    agent_hub = frappe.db.get_value("Delivery Agent", {"user": frappe.session.user, "active": 1}, "hub")
+    agent = frappe.db.get_value(
+        "Delivery Agent", {"user": frappe.session.user, "active": 1}, ["hub"], as_dict=True
+    )
+    if not agent:
+        frappe.throw("You are not set up as an active delivery agent")
+    agent_hub = agent.hub
     return scan.process_scan(token, scan_type, hub=agent_hub, proof=proof)
 
 
@@ -134,3 +139,10 @@ def razorpay_webhook():
         pay = data["payload"]["payment"]["entity"]
         payment.mark_paid(pay["order_id"], pay["id"])
     return "ok"
+@frappe.whitelist()
+def ops_action(name, action, reason=""):
+    roles = frappe.get_roles()
+    if "Courier Manager" not in roles and "System Manager" not in roles:
+        frappe.throw("Only ops can do this", frappe.PermissionError)
+    scan.ops_action(name, action, reason)
+    return scan.current_status(name)

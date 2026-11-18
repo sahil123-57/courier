@@ -118,3 +118,47 @@ class TestScans(BaseTestCase):
     def test_cannot_return_before_delivery(self):
         parcel = make_parcel()
         self.assertRaises(frappe.ValidationError, start_return, parcel.name, parcel.owner)
+class TestExceptions(BaseTestCase):
+    def setUp(self):
+        frappe.conf.courier_secret = "test-secret"
+
+    def out_for_delivery_parcel(self):
+        parcel = make_parcel()
+        do_scan(parcel, "pickup")
+        do_scan(parcel, "hub_in", "Delhi Hub")
+        do_scan(parcel, "hub_out", "Delhi Hub")
+        do_scan(parcel, "hub_in", "Pune Hub")
+        do_scan(parcel, "hub_out", "Pune Hub")
+        return parcel
+
+    def test_failed_delivery_blocks_scan_until_resumed(self):
+        parcel = self.out_for_delivery_parcel()
+        scan.ops_action(parcel.name, "fail_delivery", "Nobody home")
+        self.assertEqual(current_status(parcel.name), "Delivery Failed")
+        self.assertRaises(frappe.ValidationError, do_scan, parcel, "deliver")
+
+        scan.ops_action(parcel.name, "resume")
+        self.assertEqual(current_status(parcel.name), "Out for Delivery")
+        do_scan(parcel, "deliver")
+        self.assertEqual(current_status(parcel.name), "Delivered")
+
+    def test_can_fail_twice(self):
+        parcel = self.out_for_delivery_parcel()
+        for _ in range(2):
+            scan.ops_action(parcel.name, "fail_delivery", "Not available")
+            scan.ops_action(parcel.name, "resume")
+        self.assertEqual(current_status(parcel.name), "Out for Delivery")
+
+    def test_hold_and_resume_at_hub(self):
+        parcel = make_parcel()
+        do_scan(parcel, "pickup")
+        do_scan(parcel, "hub_in", "Delhi Hub")
+        scan.ops_action(parcel.name, "hold", "Damaged packaging")
+        self.assertRaises(frappe.ValidationError, do_scan, parcel, "hub_out", "Delhi Hub")
+        scan.ops_action(parcel.name, "resume")
+        do_scan(parcel, "hub_out", "Delhi Hub")
+        self.assertEqual(current_status(parcel.name), "In Transit")
+
+    def test_cannot_fail_a_parcel_that_is_not_out_for_delivery(self):
+        parcel = make_parcel()
+        self.assertRaises(frappe.ValidationError, scan.ops_action, parcel.name, "fail_delivery", "x")

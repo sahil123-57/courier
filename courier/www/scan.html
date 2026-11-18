@@ -21,6 +21,8 @@
     <option value="deliver">Delivered</option>
   </select>
   <div id="reader"></div>
+  <input id="tok" placeholder="or paste token here" style="width:100%;font-size:16px;padding:10px;margin-bottom:6px">
+  <button onclick="onScan(document.getElementById('tok').value.trim())">Scan pasted token</button>
   <div id="msg"></div>
 
   <script>
