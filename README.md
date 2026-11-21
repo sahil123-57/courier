@@ -1,43 +1,82 @@
 # Courier
 
-Parcel booking, scanning and tracking on Frappe.
+A parcel booking and tracking app built on Frappe.
+
+A customer books a parcel, pays, and prints a label with a QR code. Delivery
+agents scan the QR at every step until the parcel is delivered. A return runs
+the same steps in reverse.
+
+The main rule: nobody types in a parcel's status. It changes only when a
+parcel is scanned, and each scan can move it one legal step.
+
+## How it works
+
+- Every scan adds a row to the Scan Event log. Rows are never edited or deleted.
+- The status on the Parcel is a copy of the latest Scan Event.
+- The legal steps are a table in `courier/state_machine.py`. A return uses the
+  same table with the two hubs swapped.
+- The QR code holds a signed token (parcel name + HMAC), so it cannot be guessed.
+- Payment is confirmed only by Razorpay's signed webhook. A repeated webhook
+  does nothing. A parcel cannot be picked up before it is paid.
+- Scans are safe to repeat, and each scan locks the parcel row so two scans of
+  the same parcel cannot collide.
+
+## Doctypes
+
+Hub, Delivery Agent, Shipping Rate, Parcel, Scan Event.
+
+Customers are normal Frappe users with the role Courier Customer.
+
+## Where things are
+
+| Path | What it does |
+|---|---|
+| `courier/state_machine.py` | The table of legal steps and `decide()` |
+| `courier/scan.py` | Handles a scan, returns, failed delivery and hold |
+| `courier/signing.py` | Barcode token and webhook signature check |
+| `courier/payment.py` | Razorpay order and payment confirmation |
+| `courier/api.py` | The endpoints the frontend and scanner call |
+| `courier/www/scan.html` | The agent scanner page (camera) |
+| `frontend/src/pages/Home.vue` | The customer app (book, track, label) |
+| `courier/tests/` | Unit tests |
 
 ## Setup
 
-    bench get-app /path/to/courier_app
-    bench --site mysite.local install-app courier
+    bench get-app https://github.com/sahil123-57/courier
+    bench --site yoursite install-app courier
 
-Add these to `sites/mysite.local/site_config.json`:
+Add to `sites/yoursite/site_config.json`:
 
-    "courier_secret": "some-long-random-string",
+    "courier_secret": "a-long-random-string",
     "razorpay_key_id": "rzp_test_xxx",
     "razorpay_key_secret": "xxx",
     "razorpay_webhook_secret": "xxx"
 
-In the Razorpay dashboard, point the webhook (events `payment.captured` and `order.paid`) to
-`https://<your-site>/api/method/courier.api.razorpay_webhook`.
+Point the Razorpay webhook (`payment.captured`, `order.paid`) to
+`https://yoursite/api/method/courier.api.razorpay_webhook`.
 
-## Setting up data (Desk)
+Run the frontend:
 
-1. Create a Hub for each city (one hub per city).
-2. Create Shipping Rates for each city pair and service level.
-3. Create a user for each agent, give the role `Delivery Agent`, then add a Delivery Agent record with their hub.
-4. Customers sign up on the site and get the role `Courier Customer`.
+    cd frontend
+    npm install
+    npm run dev
 
-## Run the tests
+then open `http://yoursite:8080/courier`.
 
-    bench --site mysite.local run-tests --app courier
+## Demo data
 
-The state machine and token tests do not need Frappe:
+Create a Hub for each city, a Shipping Rate for each pair of cities, and a user
+with the role Delivery Agent plus a Delivery Agent record linked to a hub.
 
-    python -m unittest courier.tests.test_state_machine
+## Tests
 
-## Pages
+    bench --site yoursite run-tests --app courier
 
-- `/scan` is the agent scanner (needs HTTPS for the camera).
-- `frontend/` has the customer pages (Frappe UI). Create the app with
-  `npx degit frappe/frappe-ui-starter frontend`, then copy `src/pages` and `src/router.js` into it.
+## Not finished
 
-## How a scan works
-
-`courier/scan.py` has `process_scan`. The rules table lives in `courier/state_machine.py`.
+- Razorpay has been tested with a simulated webhook, not live test keys.
+  In developer mode with no keys, the app shows a "Simulate payment" button.
+  That is for development only and must be removed before real use.
+- The frontend is run with the Vite dev server, not a production build.
+- Email on each scan and proof of delivery are written but not demonstrated.
+- Route optimisation is not built.
