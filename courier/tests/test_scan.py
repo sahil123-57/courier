@@ -182,3 +182,103 @@ class TestProof(BaseTestCase):
         proofs = {e.status: e.proof for e in events}
         self.assertFalse(proofs["Picked Up"])
         self.assertEqual(proofs["Delivered"], "/private/files/proof.jpg")
+
+
+def make_user(email, role):
+    if not frappe.db.exists("User", email):
+        frappe.get_doc(
+            {
+                "doctype": "User",
+                "email": email,
+                "first_name": email.split("@")[0],
+                "send_welcome_email": 0,
+                "roles": [{"role": role}],
+            }
+        ).insert(ignore_permissions=True)
+    return email
+
+
+class TestApiAccess(BaseTestCase):
+    def setUp(self):
+        frappe.conf.courier_secret = "test-secret"
+        self.owner = make_user("owner.test@example.com", "Courier Customer")
+        self.other = make_user("other.test@example.com", "Courier Customer")
+
+    def tearDown(self):
+        frappe.set_user("Administrator")
+
+    def parcel_owned_by_owner(self, paid=True):
+        parcel = make_parcel(paid=paid)
+        frappe.db.set_value("Parcel", parcel.name, "owner", self.owner)
+        return parcel
+
+    def test_owner_can_track_own_parcel(self):
+        from courier import api
+
+        parcel = self.parcel_owned_by_owner()
+        frappe.set_user(self.owner)
+        result = api.track_parcel(parcel.name)
+        self.assertEqual(result["status"], "Booked & Paid")
+
+    def test_other_customer_cannot_track_it(self):
+        from courier import api
+
+        parcel = self.parcel_owned_by_owner()
+        frappe.set_user(self.other)
+        self.assertRaises(frappe.PermissionError, api.track_parcel, parcel.name)
+
+    def test_other_customer_cannot_get_the_label(self):
+        from courier import api
+
+        parcel = self.parcel_owned_by_owner()
+        frappe.set_user(self.other)
+        self.assertRaises(frappe.PermissionError, api.get_label, parcel.name)
+
+    def test_other_customer_cannot_start_a_return(self):
+        from courier import api
+
+        parcel = self.parcel_owned_by_owner()
+        frappe.set_user(self.other)
+        self.assertRaises(frappe.PermissionError, api.raise_return, parcel.name)
+
+    def test_customer_list_shows_only_own_parcels(self):
+        from courier import api
+
+        parcel = self.parcel_owned_by_owner()
+        frappe.set_user(self.other)
+        names = [p.name for p in api.my_parcels()]
+        self.assertNotIn(parcel.name, names)
+
+    def test_label_is_refused_before_payment(self):
+        from courier import api
+
+        parcel = self.parcel_owned_by_owner(paid=False)
+        frappe.set_user(self.owner)
+        self.assertRaises(frappe.ValidationError, api.get_label, parcel.name)
+
+    def test_guest_cannot_use_customer_endpoints(self):
+        from courier import api
+
+        frappe.set_user("Guest")
+        self.assertRaises(frappe.PermissionError, api.my_parcels)
+        self.assertRaises(frappe.PermissionError, api.get_quote, "Delhi", "Pune", "Standard", 2)
+
+    def test_customer_cannot_scan(self):
+        from courier import api
+
+        frappe.set_user(self.owner)
+        self.assertRaises(frappe.PermissionError, api.scan_parcel, "anything", "pickup")
+
+    def test_customer_cannot_use_ops_actions(self):
+        from courier import api
+
+        parcel = self.parcel_owned_by_owner()
+        frappe.set_user(self.owner)
+        self.assertRaises(frappe.PermissionError, api.ops_action, parcel.name, "hold", "x")
+
+    def test_forged_webhook_is_rejected(self):
+        from courier import api
+
+        frappe.set_user("Guest")
+        frappe.local.request = type("R", (), {"get_data": lambda self: b"{}", "headers": {}})()
+        self.assertRaises(Exception, api.razorpay_webhook)
