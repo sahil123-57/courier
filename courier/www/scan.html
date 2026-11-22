@@ -7,10 +7,11 @@
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <style>
     body { font-family: sans-serif; margin: 0; padding: 12px; }
-    select, button { font-size: 18px; padding: 10px; width: 100%; margin-bottom: 10px; }
+    select, button, input { font-size: 18px; padding: 10px; width: 100%; margin-bottom: 10px; box-sizing: border-box; }
     #msg { padding: 14px; font-size: 18px; border-radius: 6px; margin-top: 10px; }
     .ok { background: #d4f5d4; }
     .bad { background: #fbd5d5; }
+    #proofbox { display: none; }
   </style>
 </head>
 <body>
@@ -20,8 +21,14 @@
     <option value="hub_out">Hub - scan out</option>
     <option value="deliver">Delivered</option>
   </select>
+
+  <div id="proofbox">
+    <label>Proof of delivery (photo, optional)</label>
+    <input id="proof" type="file" accept="image/*" capture="environment">
+  </div>
+
   <div id="reader"></div>
-  <input id="tok" placeholder="or paste token here" style="width:100%;font-size:16px;padding:10px;margin-bottom:6px">
+  <input id="tok" placeholder="or paste token here">
   <button onclick="onScan(document.getElementById('tok').value.trim())">Scan pasted token</button>
   <div id="msg"></div>
 
@@ -29,28 +36,57 @@
     var csrf = "{{ csrf_token }}";
     var busy = false;
 
+    // the photo box is only needed for the Delivered scan
+    document.getElementById("type").addEventListener("change", function () {
+      document.getElementById("proofbox").style.display = this.value === "deliver" ? "block" : "none";
+    });
+
     function show(text, good) {
       var el = document.getElementById("msg");
       el.textContent = text;
       el.className = good ? "ok" : "bad";
     }
 
+    // upload the photo first, the scan then only carries the file's address
+    async function uploadProof() {
+      var file = document.getElementById("proof").files[0];
+      if (!file) return null;
+      var form = new FormData();
+      form.append("file", file, file.name);
+      form.append("is_private", "1");
+      var res = await fetch("/api/method/upload_file", {
+        method: "POST",
+        headers: { "X-Frappe-CSRF-Token": csrf },
+        body: form,
+      });
+      if (!res.ok) throw new Error("Photo upload failed");
+      var data = await res.json();
+      return data.message.file_url;
+    }
+
     async function onScan(text) {
       if (busy) return;
       busy = true;
-      var res = await fetch("/api/method/courier.api.scan_parcel", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": csrf },
-        body: JSON.stringify({ token: text, scan_type: document.getElementById("type").value }),
-      });
-      var data = await res.json();
-      if (res.ok) {
-        var r = data.message;
-        show(r.parcel + ": " + r.status + (r.duplicate ? " (already scanned)" : ""), true);
-      } else {
-        var err = "Rejected";
-        try { err = JSON.parse(JSON.parse(data._server_messages)[0]).message; } catch (e) {}
-        show(err, false);
+      try {
+        var scanType = document.getElementById("type").value;
+        var proof = scanType === "deliver" ? await uploadProof() : null;
+
+        var res = await fetch("/api/method/courier.api.scan_parcel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Frappe-CSRF-Token": csrf },
+          body: JSON.stringify({ token: text, scan_type: scanType, proof: proof }),
+        });
+        var data = await res.json();
+        if (res.ok) {
+          var r = data.message;
+          show(r.parcel + ": " + r.status + (r.duplicate ? " (already scanned)" : ""), true);
+        } else {
+          var err = "Rejected";
+          try { err = JSON.parse(JSON.parse(data._server_messages)[0]).message; } catch (e) {}
+          show(err, false);
+        }
+      } catch (e) {
+        show(e.message, false);
       }
       setTimeout(function () { busy = false; }, 2000);
     }

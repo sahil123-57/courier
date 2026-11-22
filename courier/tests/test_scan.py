@@ -162,3 +162,23 @@ class TestExceptions(BaseTestCase):
     def test_cannot_fail_a_parcel_that_is_not_out_for_delivery(self):
         parcel = make_parcel()
         self.assertRaises(frappe.ValidationError, scan.ops_action, parcel.name, "fail_delivery", "x")
+
+
+class TestProof(BaseTestCase):
+    def setUp(self):
+        frappe.conf.courier_secret = "test-secret"
+
+    def test_proof_is_kept_only_on_the_delivered_scan(self):
+        parcel = make_parcel()
+        token = make_token(parcel.name, "test-secret")
+        process_scan(token, "pickup", None, "/private/files/ignored.jpg")
+        process_scan(token, "hub_in", "Delhi Hub")
+        process_scan(token, "hub_out", "Delhi Hub")
+        process_scan(token, "hub_in", "Pune Hub")
+        process_scan(token, "hub_out", "Pune Hub")
+        process_scan(token, "deliver", None, "/private/files/proof.jpg")
+
+        events = frappe.get_all("Scan Event", {"parcel": parcel.name}, ["status", "proof"])
+        proofs = {e.status: e.proof for e in events}
+        self.assertFalse(proofs["Picked Up"])
+        self.assertEqual(proofs["Delivered"], "/private/files/proof.jpg")
