@@ -100,20 +100,45 @@ class TestScans(BaseTestCase):
         event = frappe.get_all("Scan Event", {"parcel": parcel.name}, pluck="name")[0]
         self.assertRaises(frappe.ValidationError, frappe.delete_doc, "Scan Event", event, force=True)
 
-    def test_return_flow_mirrors_forward(self):
+    def test_return_is_a_second_parcel_with_swapped_hubs(self):
+        parcel = make_parcel()
+        walk_forward(parcel)
+        ret = frappe.get_doc("Parcel", start_return(parcel.name, parcel.owner))
+
+        self.assertTrue(ret.is_return)
+        self.assertEqual(ret.return_against, parcel.name)
+        self.assertEqual(ret.origin_hub, "Pune Hub")
+        self.assertEqual(ret.destination_hub, "Delhi Hub")
+        self.assertEqual(ret.sender_name, parcel.recipient_name)
+        self.assertEqual(ret.recipient_name, parcel.sender_name)
+        # the first parcel keeps its own history
+        self.assertEqual(current_status(parcel.name), "Delivered")
+
+        def ret_scan(scan_type, hub=None):
+            return process_scan(ret.token, scan_type, hub)
+
+        ret_scan("pickup")
+        # a return starts at the hub where the first parcel was delivered
+        self.assertRaises(frappe.ValidationError, ret_scan, "hub_in", "Delhi Hub")
+        ret_scan("hub_in", "Pune Hub")
+        ret_scan("hub_out", "Pune Hub")
+        ret_scan("hub_in", "Delhi Hub")
+        ret_scan("hub_out", "Delhi Hub")
+        ret_scan("deliver")
+        self.assertEqual(current_status(ret.name), "Returned")
+        self.assertEqual(current_status(parcel.name), "Delivered")
+
+    def test_a_parcel_can_only_be_returned_once(self):
         parcel = make_parcel()
         walk_forward(parcel)
         start_return(parcel.name, parcel.owner)
+        self.assertRaises(frappe.ValidationError, start_return, parcel.name, parcel.owner)
 
-        do_scan(parcel, "pickup")
-        # return goes to the destination hub first
-        self.assertRaises(frappe.ValidationError, do_scan, parcel, "hub_in", "Delhi Hub")
-        do_scan(parcel, "hub_in", "Pune Hub")
-        do_scan(parcel, "hub_out", "Pune Hub")
-        do_scan(parcel, "hub_in", "Delhi Hub")
-        do_scan(parcel, "hub_out", "Delhi Hub")
-        do_scan(parcel, "deliver")
-        self.assertEqual(current_status(parcel.name), "Returned")
+    def test_a_return_cannot_be_returned(self):
+        parcel = make_parcel()
+        walk_forward(parcel)
+        ret_name = start_return(parcel.name, parcel.owner)
+        self.assertRaises(frappe.ValidationError, start_return, ret_name, parcel.owner)
 
     def test_cannot_return_before_delivery(self):
         parcel = make_parcel()

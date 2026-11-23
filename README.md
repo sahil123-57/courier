@@ -13,8 +13,10 @@ parcel is scanned, and each scan can move it one legal step.
 
 - Every scan adds a row to the Scan Event log. Rows are never edited or deleted.
 - The status on the Parcel is a copy of the latest Scan Event.
-- The legal steps are a table in `courier/state_machine.py`. A return uses the
-  same table with the two hubs swapped.
+- The legal steps are a table in `courier/state_machine.py`.
+- A return is a second Parcel on the same order (`is_return`, `return_against`).
+  It is created with sender and recipient swapped and the two hubs swapped,
+  so it walks the same steps. The first parcel stays Delivered.
 - The QR code holds a signed token (parcel name + HMAC), so it cannot be guessed.
 - Payment is confirmed only by Razorpay's signed webhook. A repeated webhook
   does nothing. A parcel cannot be picked up before it is paid.

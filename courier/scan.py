@@ -1,7 +1,7 @@
 import frappe
 
 from courier import state_machine
-from courier.signing import read_token
+from courier.signing import make_token, read_token
 from courier.state_machine import ScanError
 
 FAILABLE = ("Out for Delivery", "Return Out for Delivery")
@@ -60,13 +60,15 @@ def process_scan(token, scan_type, hub=None, proof=None):
     # lock the row so two scans of the same parcel run one after another
     parcel = frappe.get_doc("Parcel", name, for_update=True)
 
-    if scan_type == "pickup" and parcel.direction == "Forward" and parcel.payment_status != "Paid":
+    # a return needs no payment, the order was already paid for
+    if scan_type == "pickup" and not parcel.is_return and parcel.payment_status != "Paid":
         frappe.throw("Payment is not confirmed for this parcel")
 
+    direction = "Return" if parcel.is_return else "Forward"
     status = current_status(parcel.name)
     try:
         action, new_status = state_machine.decide(
-            parcel.direction,
+            direction,
             status,
             scan_type,
             hub,
@@ -84,14 +86,46 @@ def process_scan(token, scan_type, hub=None, proof=None):
 
 
 def start_return(parcel_name, user):
-    parcel = frappe.get_doc("Parcel", parcel_name, for_update=True)
-    if parcel.owner != user:
+    """A return is a second parcel on the same order. The first one stays Delivered."""
+    original = frappe.get_doc("Parcel", parcel_name, for_update=True)
+    if original.owner != user:
         frappe.throw("Not your parcel", frappe.PermissionError)
-    if current_status(parcel.name) != "Delivered":
+    if original.is_return:
+        frappe.throw("A return cannot be returned")
+    if current_status(original.name) != "Delivered":
         frappe.throw("Only a delivered parcel can be returned")
-    parcel.db_set("direction", "Return")
-    add_event(parcel, "return_request", "Return Requested")
-    return parcel.name
+    if frappe.db.exists("Parcel", {"return_against": original.name}):
+        frappe.throw("A return was already raised for this parcel")
+
+    # sender and recipient swap, and so do the two hubs
+    ret = frappe.get_doc(
+        {
+            "doctype": "Parcel",
+            "is_return": 1,
+            "return_against": original.name,
+            "booking_key": f"return:{original.name}",
+            "sender_name": original.recipient_name,
+            "sender_phone": original.recipient_phone,
+            "sender_address": original.recipient_address,
+            "origin_city": original.destination_city,
+            "recipient_name": original.sender_name,
+            "recipient_phone": original.sender_phone,
+            "recipient_address": original.sender_address,
+            "destination_city": original.origin_city,
+            "weight_kg": original.weight_kg,
+            "service_level": original.service_level,
+            "amount": 0,
+            "payment_status": "Not Needed",
+            "origin_hub": original.destination_hub,
+            "destination_hub": original.origin_hub,
+        }
+    ).insert(ignore_permissions=True)
+
+    # the return belongs to the same customer and gets its own barcode
+    frappe.db.set_value("Parcel", ret.name, "owner", original.owner)
+    ret.db_set("token", make_token(ret.name, get_secret()))
+    add_event(ret, "return_request", "Return Requested")
+    return ret.name
 
 
 def status_before_last(parcel_name):

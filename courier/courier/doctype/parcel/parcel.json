@@ -16,7 +16,8 @@
   "weight_kg",
   "service_level",
   "amount",
-  "direction",
+  "is_return",
+  "return_against",
   "status",
   "origin_hub",
   "destination_hub",
@@ -91,13 +92,19 @@
    "read_only": 1
   },
   {
-   "fieldname": "direction",
-   "fieldtype": "Select",
-   "label": "Direction",
-   "options": "Forward\nReturn",
-   "default": "Forward",
+   "fieldname": "is_return",
+   "fieldtype": "Check",
+   "label": "Is Return",
+   "default": "0",
    "read_only": 1,
    "in_standard_filter": 1
+  },
+  {
+   "fieldname": "return_against",
+   "fieldtype": "Link",
+   "options": "Parcel",
+   "label": "Return Against",
+   "read_only": 1
   },
   {
    "fieldname": "status",
@@ -126,7 +133,7 @@
    "fieldname": "payment_status",
    "fieldtype": "Select",
    "label": "Payment Status",
-   "options": "Unpaid\nPaid",
+   "options": "Unpaid\nPaid\nNot Needed",
    "default": "Unpaid",
    "read_only": 1,
    "in_list_view": 1

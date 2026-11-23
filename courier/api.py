@@ -74,7 +74,7 @@ def my_parcels():
     return frappe.get_all(
         "Parcel",
         filters={"owner": frappe.session.user},
-        fields=["name", "recipient_name", "destination_city", "status", "payment_status", "creation"],
+        fields=["name", "recipient_name", "destination_city", "status", "payment_status", "is_return", "creation"],
         order_by="creation desc",
     )
 
@@ -94,7 +94,7 @@ def track_parcel(name):
 @frappe.whitelist()
 def get_label(name):
     parcel = my_parcel(name)
-    if parcel.payment_status != "Paid":
+    if parcel.payment_status == "Unpaid":
         frappe.throw("Label is available after payment")
     return {
         "parcel": parcel.name,

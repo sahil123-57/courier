@@ -14,11 +14,11 @@
     <div v-if="view === 'list'">
       <p v-if="!parcels.length" class="text-ink-gray-5">No parcels yet.</p>
       <div v-for="p in parcels" :key="p.name" class="mb-2 cursor-pointer rounded border p-3" @click="openTrack(p.name)">
-        <div class="font-medium">{{ p.name }}: {{ p.recipient_name }}, {{ p.destination_city }}</div>
+        <div class="font-medium">{{ p.name }}: {{ p.recipient_name }}, {{ p.destination_city }}<span v-if="p.is_return"> (return)</span></div>
         <div class="mb-2 text-sm text-ink-gray-5">{{ p.status }}</div>
         <div class="flex gap-2">
           <Button @click.stop="openTrack(p.name)">Track</Button>
-          <Button v-if="p.payment_status === 'Paid'" @click.stop="openLabel(p.name)">Label</Button>
+          <Button v-if="p.payment_status !== 'Unpaid'" @click.stop="openLabel(p.name)">Label</Button>
         </div>
       </div>
     </div>
@@ -219,8 +219,8 @@ async function openTrack(name) {
 async function startReturn() {
   error.value = ''
   try {
-    await call('courier.api.raise_return', { name: info.value.parcel })
-    await loadInfo(info.value.parcel)
+    const returnParcel = await call('courier.api.raise_return', { name: info.value.parcel })
+    await openTrack(returnParcel)
   } catch (e) {
     error.value = message(e)
   }

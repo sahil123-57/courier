@@ -14,7 +14,6 @@ def scan(direction, status, scan_type, hub=None):
 class TestTransitions(unittest.TestCase):
     def test_forward_flow_in_order(self):
         status = "Booked & Paid"
-        hubs = {"pickup": None, "deliver": None}
         for before, stype, after, place in FORWARD:
             hub = {"origin": ORIGIN, "destination": DEST}.get(place)
             action, status = scan("Forward", status, stype, hub)
@@ -59,13 +58,14 @@ class TestDuplicates(unittest.TestCase):
 
 
 class TestReturnMirror(unittest.TestCase):
+    # a return is its own parcel with swapped hubs, so it walks the same steps
+
     def test_same_shape_as_forward(self):
         self.assertEqual(len(FORWARD), len(RETURN))
         self.assertEqual([s[1] for s in FORWARD], [s[1] for s in RETURN])
 
-    def test_hubs_are_swapped(self):
-        swap = {None: None, "origin": "destination", "destination": "origin"}
-        self.assertEqual([swap[s[3]] for s in FORWARD], [s[3] for s in RETURN])
+    def test_same_hub_places_as_forward(self):
+        self.assertEqual([s[3] for s in FORWARD], [s[3] for s in RETURN])
 
     def test_return_flow_in_order(self):
         status = "Return Requested"
@@ -74,9 +74,13 @@ class TestReturnMirror(unittest.TestCase):
             _, status = scan("Return", status, stype, hub)
         self.assertEqual(status, "Returned")
 
-    def test_return_first_hub_is_the_destination_hub(self):
+    def test_return_wrong_hub_is_rejected(self):
         with self.assertRaises(ScanError):
-            scan("Return", "Return Picked Up", "hub_in", ORIGIN)
+            scan("Return", "Return Picked Up", "hub_in", DEST)
+
+    def test_return_repeat_scan_is_a_noop(self):
+        action, _ = scan("Return", "Return Picked Up", "pickup")
+        self.assertEqual(action, "duplicate")
 
 
 class TestTokens(unittest.TestCase):
