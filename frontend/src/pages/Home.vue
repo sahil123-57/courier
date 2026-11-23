@@ -10,7 +10,6 @@
 
     <p v-if="error" class="mb-3 rounded bg-[#fef2f2] p-2 text-[#b91c1c] print:hidden">{{ error }}</p>
 
-    <!-- my parcels -->
     <div v-if="view === 'list'">
       <p v-if="!parcels.length" class="text-ink-gray-5">No parcels yet.</p>
       <div v-for="p in parcels" :key="p.name" class="mb-2 cursor-pointer rounded border p-3" @click="openTrack(p.name)">
@@ -23,7 +22,6 @@
       </div>
     </div>
 
-    <!-- book -->
     <div v-if="view === 'book'">
       <h2 class="mb-2 text-lg font-medium">Book a parcel</h2>
       <label v-for="f in fields" :key="f[0]" class="mb-2 block">
@@ -57,7 +55,6 @@
       </div>
     </div>
 
-    <!-- track -->
     <div v-if="view === 'track' && info">
       <h2 class="text-lg font-medium">{{ info.parcel }}</h2>
       <p class="mb-3">Status: {{ info.status }}</p>
@@ -74,7 +71,6 @@
       </div>
     </div>
 
-    <!-- label -->
     <div v-if="view === 'label' && label">
       <div class="border-2 border-black p-4">
         <div class="text-lg font-bold">{{ label.parcel }}</div>
@@ -118,7 +114,6 @@ const pay = ref(null)
 const qr = ref(null)
 const form = reactive({ service_level: 'Standard' })
 
-// one key per page load, so a double click does not book two parcels
 const bookingKey = (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : String(Date.now()) + Math.random()
 
 let timer = null
@@ -181,7 +176,6 @@ async function book() {
         amount: res.amount * 100,
         currency: 'INR',
         name: 'Courier',
-        // the real confirmation is the webhook, this only moves to the tracking page
         handler: () => openTrack(res.parcel),
       }).open()
     }
@@ -244,7 +238,6 @@ function printLabel() {
 
 onMounted(() => {
   showList()
-  // keep the tracking timeline fresh
   timer = setInterval(() => {
     if (view.value === 'track' && info.value) loadInfo(info.value.parcel)
   }, 8000)

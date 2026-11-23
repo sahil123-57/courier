@@ -8,12 +8,10 @@ from courier.signing import make_token
 
 
 def create_order(parcel):
-    # asking twice gives the same order back
     if parcel.razorpay_order_id:
         return parcel.razorpay_order_id
 
     if not frappe.conf.get("razorpay_key_id") and frappe.conf.get("developer_mode"):
-        # no keys on a dev site, make a fake order so the flow can still be shown
         order = {"id": "order_sim_" + frappe.generate_hash(length=10), "simulated": True}
     else:
         res = requests.post(
@@ -53,7 +51,7 @@ def mark_paid(order_id, payment_id):
 
     parcel = frappe.get_doc("Parcel", name, for_update=True)
     if parcel.payment_status == "Paid":
-        return  # razorpay sent the webhook again
+        return
 
     parcel.db_set("payment_status", "Paid")
     parcel.db_set("razorpay_payment_id", payment_id)

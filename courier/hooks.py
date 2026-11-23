@@ -11,7 +11,6 @@ doc_events = {
     "Scan Event": {"after_insert": "courier.notify.on_scan_event"},
 }
 
-# Load the frontend on every path under /courier
 website_route_rules = [
     {"from_route": "/courier/<path:app_path>", "to_route": "courier"},
 ]

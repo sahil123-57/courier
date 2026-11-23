@@ -11,7 +11,6 @@ def make_token(name, secret):
 
 
 def read_token(token, secret):
-    # returns the parcel name, or None if the token was tampered with
     name, _, sig = (token or "").rpartition(".")
     if not name or not hmac.compare_digest(sig, _sig(name, secret)):
         return None

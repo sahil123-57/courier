@@ -1,9 +1,9 @@
 import frappe
 
 try:
-    from frappe.tests import IntegrationTestCase as BaseTestCase  # newer frappe
+    from frappe.tests import IntegrationTestCase as BaseTestCase
 except ImportError:
-    from frappe.tests.utils import FrappeTestCase as BaseTestCase  # v15
+    from frappe.tests.utils import FrappeTestCase as BaseTestCase
 
 from courier import payment, scan
 from courier.scan import current_status, process_scan, start_return
@@ -59,7 +59,7 @@ class TestScans(BaseTestCase):
         walk_forward(parcel)
         self.assertEqual(current_status(parcel.name), "Delivered")
         events = frappe.get_all("Scan Event", {"parcel": parcel.name})
-        self.assertEqual(len(events), 7)  # payment + 6 scans
+        self.assertEqual(len(events), 7)
 
     def test_wrong_hub_rejected(self):
         parcel = make_parcel()
@@ -111,14 +111,12 @@ class TestScans(BaseTestCase):
         self.assertEqual(ret.destination_hub, "Delhi Hub")
         self.assertEqual(ret.sender_name, parcel.recipient_name)
         self.assertEqual(ret.recipient_name, parcel.sender_name)
-        # the first parcel keeps its own history
         self.assertEqual(current_status(parcel.name), "Delivered")
 
         def ret_scan(scan_type, hub=None):
             return process_scan(ret.token, scan_type, hub)
 
         ret_scan("pickup")
-        # a return starts at the hub where the first parcel was delivered
         self.assertRaises(frappe.ValidationError, ret_scan, "hub_in", "Delhi Hub")
         ret_scan("hub_in", "Pune Hub")
         ret_scan("hub_out", "Pune Hub")

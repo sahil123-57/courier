@@ -36,7 +36,6 @@
     var csrf = "{{ csrf_token }}";
     var busy = false;
 
-    // the photo box is only needed for the Delivered scan
     document.getElementById("type").addEventListener("change", function () {
       document.getElementById("proofbox").style.display = this.value === "deliver" ? "block" : "none";
     });
@@ -47,7 +46,6 @@
       el.className = good ? "ok" : "bad";
     }
 
-    // upload the photo first, the scan then only carries the file's address
     async function uploadProof() {
       var file = document.getElementById("proof").files[0];
       if (!file) return null;

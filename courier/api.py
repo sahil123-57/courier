@@ -29,7 +29,6 @@ def book_parcel(data):
     login_required()
     data = frappe.parse_json(data)
 
-    # same key from the same user = same parcel (double click, retry)
     key = f"{frappe.session.user}:{data.get('booking_key')}"
     name = frappe.db.get_value("Parcel", {"booking_key": key})
 
@@ -117,7 +116,6 @@ def scan_parcel(token, scan_type, proof=None):
     if "Delivery Agent" not in frappe.get_roles():
         frappe.throw("Only delivery agents can scan", frappe.PermissionError)
 
-    # hub comes from the agent's own record, not from the phone
     agent = frappe.db.get_value(
         "Delivery Agent", {"user": frappe.session.user, "active": 1}, ["hub"], as_dict=True
     )
@@ -150,7 +148,6 @@ def ops_action(name, action, reason=""):
 
 @frappe.whitelist()
 def dev_simulate_payment(name):
-    # development only, stands in for the razorpay webhook
     if not frappe.conf.get("developer_mode"):
         frappe.throw("Only available in developer mode")
     parcel = my_parcel(name)
