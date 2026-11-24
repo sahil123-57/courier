@@ -58,6 +58,7 @@ class TestDuplicates(unittest.TestCase):
 
 
 class TestReturnMirror(unittest.TestCase):
+    # a return is its own parcel with swapped hubs, so it walks the same steps
 
     def test_same_shape_as_forward(self):
         self.assertEqual(len(FORWARD), len(RETURN))
