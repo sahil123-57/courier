@@ -17,6 +17,7 @@ def get_secret():
 
 
 def current_status(parcel_name):
+    # the log is the truth, Parcel.status is only a copy of it
     last = frappe.get_all(
         "Scan Event",
         filters={"parcel": parcel_name},
@@ -31,6 +32,7 @@ def add_event(parcel, scan_type, status, hub=None, proof=None, note=None, unique
     seq = frappe.db.count("Scan Event", {"parcel": parcel.name}) + 1
     key = f"{parcel.name}:{status}"
     if unique:
+        # exceptions can repeat (fail, retry, fail again), so the key needs the seq
         key = f"{key}:{seq}"
 
     frappe.get_doc(
@@ -55,8 +57,10 @@ def process_scan(token, scan_type, hub=None, proof=None):
     if not name or not frappe.db.exists("Parcel", name):
         frappe.throw("Invalid barcode")
 
+    # lock the row so two scans of the same parcel run one after another
     parcel = frappe.get_doc("Parcel", name, for_update=True)
 
+    # a return needs no payment, the order was already paid for
     if scan_type == "pickup" and not parcel.is_return and parcel.payment_status != "Paid":
         frappe.throw("Payment is not confirmed for this parcel")
 
@@ -82,6 +86,7 @@ def process_scan(token, scan_type, hub=None, proof=None):
 
 
 def start_return(parcel_name, user):
+    """A return is a second parcel on the same order. The first one stays Delivered."""
     original = frappe.get_doc("Parcel", parcel_name, for_update=True)
     if original.owner != user:
         frappe.throw("Not your parcel", frappe.PermissionError)
@@ -92,6 +97,7 @@ def start_return(parcel_name, user):
     if frappe.db.exists("Parcel", {"return_against": original.name}):
         frappe.throw("A return was already raised for this parcel")
 
+    # sender and recipient swap, and so do the two hubs
     ret = frappe.get_doc(
         {
             "doctype": "Parcel",
@@ -115,6 +121,7 @@ def start_return(parcel_name, user):
         }
     ).insert(ignore_permissions=True)
 
+    # the return belongs to the same customer and gets its own barcode
     frappe.db.set_value("Parcel", ret.name, "owner", original.owner)
     ret.db_set("token", make_token(ret.name, get_secret()))
     add_event(ret, "return_request", "Return Requested")
@@ -133,6 +140,7 @@ def status_before_last(parcel_name):
 
 
 def ops_action(parcel_name, action, reason=""):
+    # used by ops from Desk, still goes through the log
     parcel = frappe.get_doc("Parcel", parcel_name, for_update=True)
     status = current_status(parcel.name)
 
