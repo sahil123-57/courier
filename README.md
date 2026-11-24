@@ -23,6 +23,79 @@ parcel is scanned, and each scan can move it one legal step.
 - Scans are safe to repeat, and each scan locks the parcel row so two scans of
   the same parcel cannot collide.
 
+## Data model
+
+```mermaid
+erDiagram
+    USER ||--o| DELIVERY_AGENT : "is"
+    HUB ||--o{ DELIVERY_AGENT : "works at"
+    HUB ||--o{ PARCEL : "origin_hub"
+    HUB ||--o{ PARCEL : "destination_hub"
+    USER ||--o{ PARCEL : "owner"
+    PARCEL ||--o{ SCAN_EVENT : "has"
+    HUB |o--o{ SCAN_EVENT : "hub"
+    USER ||--o{ SCAN_EVENT : "scanned_by"
+    PARCEL |o--o| PARCEL : "return_against"
+
+    HUB {
+        string hub_name PK
+        string city UK
+        string address
+        bool active
+    }
+    DELIVERY_AGENT {
+        string name PK
+        string user FK
+        string hub FK
+        string phone
+        bool active
+    }
+    SHIPPING_RATE {
+        string name PK
+        string origin_city
+        string destination_city
+        string service_level
+        float base_price
+        float price_per_kg
+    }
+    PARCEL {
+        string name PK
+        string owner FK
+        string sender_name
+        string origin_city
+        string recipient_name
+        string destination_city
+        float weight_kg
+        string service_level
+        float amount
+        string origin_hub FK
+        string destination_hub FK
+        bool is_return
+        string return_against FK
+        string status
+        string payment_status
+        string razorpay_order_id
+        string booking_key UK
+        string token
+    }
+    SCAN_EVENT {
+        string name PK
+        string parcel FK
+        int seq
+        string scan_type
+        string status
+        string hub FK
+        string scanned_by FK
+        string scan_key UK
+        string proof
+        string note
+    }
+```
+
+The Parcel is the booking and also one physical trip. A return is a second Parcel
+linked to the first by `return_against`. Shipping Rate is looked up by the two cities
+and the service level, so it has no link field.
+
 ## Doctypes
 
 Hub, Delivery Agent, Shipping Rate, Parcel, Scan Event.
