@@ -89,7 +89,7 @@
 
 <script setup>
 import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { Button, call } from 'frappe-ui'
+import { Button, call, createResource } from 'frappe-ui'
 import QRCode from 'qrcode'
 
 const fields = [
@@ -176,13 +176,33 @@ async function book() {
         amount: res.amount * 100,
         currency: 'INR',
         name: 'Courier',
-        handler: () => openTrack(res.parcel),
+        handler: (response) => confirmPayment(response, res.parcel),
       }).open()
     }
   } catch (e) {
     error.value = message(e)
   }
   busy.value = false
+}
+
+function confirmPayment(response, parcel) {
+  createResource({
+    url: '/razorpay-api/success-handler',
+    auto: true,
+    makeParams() {
+      return {
+        order_id: response.razorpay_order_id,
+        payment_id: response.razorpay_payment_id,
+        signature: response.razorpay_signature,
+      }
+    },
+    onSuccess() {
+      openTrack(parcel)
+    },
+    onError(e) {
+      error.value = message(e)
+    },
+  })
 }
 
 async function simulate() {

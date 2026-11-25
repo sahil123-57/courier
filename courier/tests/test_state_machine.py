@@ -1,6 +1,6 @@
 import unittest
 
-from courier.signing import make_token, read_token, verify_webhook
+from courier.signing import make_token, read_token
 from courier.state_machine import FORWARD, RETURN, ScanError, decide
 
 ORIGIN = "Delhi Hub"
@@ -58,7 +58,6 @@ class TestDuplicates(unittest.TestCase):
 
 
 class TestReturnMirror(unittest.TestCase):
-
     def test_same_shape_as_forward(self):
         self.assertEqual(len(FORWARD), len(RETURN))
         self.assertEqual([s[1] for s in FORWARD], [s[1] for s in RETURN])
@@ -91,14 +90,6 @@ class TestTokens(unittest.TestCase):
         self.assertIsNone(read_token("PCL-00001.abcdef", "secret"))
         self.assertIsNone(read_token(make_token("PCL-00001", "secret"), "other"))
         self.assertIsNone(read_token("", "secret"))
-
-    def test_webhook_signature(self):
-        import hashlib, hmac
-        body = b'{"event":"payment.captured"}'
-        sig = hmac.new(b"whsec", body, hashlib.sha256).hexdigest()
-        self.assertTrue(verify_webhook(body, sig, "whsec"))
-        self.assertFalse(verify_webhook(body, "bad", "whsec"))
-        self.assertFalse(verify_webhook(body, sig, ""))
 
 
 if __name__ == "__main__":

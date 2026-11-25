@@ -5,7 +5,7 @@ try:
 except ImportError:
     from frappe.tests.utils import FrappeTestCase as BaseTestCase
 
-from courier import payment, scan
+from courier import scan
 from courier.scan import current_status, process_scan, start_return
 from courier.signing import make_token
 
@@ -14,6 +14,23 @@ def make_hub(name, city):
     if not frappe.db.exists("Hub", name):
         frappe.get_doc({"doctype": "Hub", "hub_name": name, "city": city}).insert()
     return name
+
+
+def pay_parcel(parcel, payment_id="pay_test"):
+    order = frappe.get_doc(
+        doctype="Razorpay Order",
+        order_id=frappe.generate_hash(length=10),
+        amount=300,
+        currency="INR",
+        status="Pending",
+        ref_dt="Parcel",
+        ref_dn=parcel.name,
+        meta_data="{}",
+    ).insert()
+    order.status = "Paid"
+    order.payment_id = payment_id
+    order.save()
+    return order
 
 
 def make_parcel(paid=True):
@@ -28,11 +45,10 @@ def make_parcel(paid=True):
             "amount": 300,
             "origin_hub": make_hub("Delhi Hub", "Delhi"),
             "destination_hub": make_hub("Pune Hub", "Pune"),
-            "razorpay_order_id": frappe.generate_hash(length=10),
         }
     ).insert()
     if paid:
-        payment.mark_paid(parcel.razorpay_order_id, "pay_test")
+        pay_parcel(parcel)
         parcel.reload()
     return parcel
 
@@ -79,17 +95,16 @@ class TestScans(BaseTestCase):
         parcel.db_set("token", make_token(parcel.name, "test-secret"))
         self.assertRaises(frappe.ValidationError, do_scan, parcel, "pickup")
 
-        payment.mark_paid(parcel.razorpay_order_id, "pay_1")
+        pay_parcel(parcel)
         do_scan(parcel, "pickup")
         self.assertEqual(current_status(parcel.name), "Picked Up")
-
-    def test_webhook_retry_does_not_pay_twice(self):
+    def test_repeated_payment_confirmation_does_not_pay_twice(self):
         parcel = make_parcel(paid=False)
-        payment.mark_paid(parcel.razorpay_order_id, "pay_1")
-        payment.mark_paid(parcel.razorpay_order_id, "pay_1")
+        order = pay_parcel(parcel)
+        order.save()
+        order.save()
         count = frappe.db.count("Scan Event", {"parcel": parcel.name, "status": "Booked & Paid"})
         self.assertEqual(count, 1)
-
     def test_status_cannot_be_edited(self):
         parcel = make_parcel()
         parcel.status = "Delivered"
@@ -299,9 +314,59 @@ class TestApiAccess(BaseTestCase):
         frappe.set_user(self.owner)
         self.assertRaises(frappe.PermissionError, api.ops_action, parcel.name, "hold", "x")
 
-    def test_forged_webhook_is_rejected(self):
-        from courier import api
 
-        frappe.set_user("Guest")
-        frappe.local.request = type("R", (), {"get_data": lambda self: b"{}", "headers": {}})()
-        self.assertRaises(Exception, api.razorpay_webhook)
+class TestPaymentHook(BaseTestCase):
+    def setUp(self):
+        frappe.conf.courier_secret = "test-secret"
+
+    def new_order(self, parcel, status="Pending"):
+        return frappe.get_doc(
+            doctype="Razorpay Order",
+            order_id=frappe.generate_hash(length=10),
+            amount=300,
+            currency="INR",
+            status=status,
+            ref_dt="Parcel",
+            ref_dn=parcel.name,
+            meta_data="{}",
+        ).insert()
+
+    def test_pending_order_does_not_pay_the_parcel(self):
+        parcel = make_parcel(paid=False)
+        self.new_order(parcel)
+        parcel.reload()
+        self.assertEqual(parcel.payment_status, "Unpaid")
+        self.assertFalse(parcel.token)
+
+    def test_failed_order_does_not_pay_the_parcel(self):
+        parcel = make_parcel(paid=False)
+        order = self.new_order(parcel)
+        order.status = "Failed"
+        order.save()
+        parcel.reload()
+        self.assertEqual(parcel.payment_status, "Unpaid")
+
+    def test_paid_order_pays_the_parcel_once(self):
+        parcel = make_parcel(paid=False)
+        order = self.new_order(parcel)
+        order.status = "Paid"
+        order.payment_id = "pay_1"
+        order.save()
+        order.save()
+        parcel.reload()
+        self.assertEqual(parcel.payment_status, "Paid")
+        self.assertEqual(parcel.razorpay_payment_id, "pay_1")
+        self.assertEqual(parcel.razorpay_order_id, order.order_id)
+        self.assertTrue(parcel.token)
+        count = frappe.db.count("Scan Event", {"parcel": parcel.name, "status": "Booked & Paid"})
+        self.assertEqual(count, 1)
+
+    def test_starting_payment_twice_reuses_the_pending_order(self):
+        from courier import payment
+
+        parcel = make_parcel(paid=False)
+        order = self.new_order(parcel)
+        frappe.db.set_single_value("Razorpay Settings", "key_id", "rzp_test_x")
+        result = payment.start_payment(parcel)
+        self.assertEqual(result["order_id"], order.order_id)
+        self.assertEqual(frappe.db.count("Razorpay Order", {"ref_dt": "Parcel", "ref_dn": parcel.name}), 1)

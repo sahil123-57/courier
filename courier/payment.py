@@ -1,61 +1,43 @@
-import json
-
 import frappe
-import requests
 
 from courier.scan import add_event, get_secret
 from courier.signing import make_token
+from razorpay_frappe.razorpay_integration.doctype.razorpay_order.razorpay_order import RazorpayOrder
 
 
-def create_order(parcel):
-    if parcel.razorpay_order_id:
-        return parcel.razorpay_order_id
-
-    if not frappe.conf.get("razorpay_key_id") and frappe.conf.get("developer_mode"):
-        order = {"id": "order_sim_" + frappe.generate_hash(length=10), "simulated": True}
-    else:
-        res = requests.post(
-            "https://api.razorpay.com/v1/orders",
-            auth=(frappe.conf.get("razorpay_key_id"), frappe.conf.get("razorpay_key_secret")),
-            json={
-                "amount": int(parcel.amount * 100),
-                "currency": "INR",
-                "receipt": parcel.name,
-            },
-            timeout=20,
-        )
-        res.raise_for_status()
-        order = res.json()
-
-    frappe.get_doc(
-        {
-            "doctype": "Integration Request",
-            "integration_request_service": "Razorpay",
-            "request_id": order["id"],
-            "reference_doctype": "Parcel",
-            "reference_docname": parcel.name,
-            "is_remote_request": 1,
-            "status": "Queued",
-            "data": json.dumps(order),
-        }
-    ).insert(ignore_permissions=True)
-
-    parcel.db_set("razorpay_order_id", order["id"])
-    return order["id"]
+def razorpay_key():
+    return frappe.db.get_single_value("Razorpay Settings", "key_id")
 
 
-def mark_paid(order_id, payment_id):
-    name = frappe.db.get_value("Parcel", {"razorpay_order_id": order_id})
-    if not name:
-        return
+def start_payment(parcel):
+    if not razorpay_key() and frappe.conf.get("developer_mode"):
+        return {"key_id": None, "order_id": None}
 
-    parcel = frappe.get_doc("Parcel", name, for_update=True)
+    order_id = frappe.db.get_value(
+        "Razorpay Order",
+        {"ref_dt": "Parcel", "ref_dn": parcel.name, "status": "Pending"},
+        "order_id",
+    )
+    if order_id:
+        return {"key_id": razorpay_key(), "order_id": order_id}
+
+    return RazorpayOrder.initiate(
+        parcel.amount, "INR", {"parcel": parcel.name}, ref_dt="Parcel", ref_dn=parcel.name
+    )
+
+
+def on_order_update(doc, method=None):
+    if doc.ref_dt == "Parcel" and doc.status == "Paid":
+        mark_paid(doc)
+
+
+def mark_paid(order):
+    parcel = frappe.get_doc("Parcel", order.ref_dn, for_update=True)
     if parcel.payment_status == "Paid":
         return
 
     parcel.db_set("payment_status", "Paid")
-    parcel.db_set("razorpay_payment_id", payment_id)
+    parcel.db_set("razorpay_order_id", order.order_id)
+    parcel.db_set("razorpay_payment_id", order.payment_id)
     parcel.db_set("token", make_token(parcel.name, get_secret()))
     add_event(parcel, "payment", "Booked & Paid")
-
-    frappe.db.set_value("Integration Request", {"request_id": order_id}, "status", "Completed")

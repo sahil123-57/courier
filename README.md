@@ -18,8 +18,10 @@ parcel is scanned, and each scan can move it one legal step.
   It is created with sender and recipient swapped and the two hubs swapped,
   so it walks the same steps. The first parcel stays Delivered.
 - The QR code holds a signed token (parcel name + HMAC), so it cannot be guessed.
-- Payment is confirmed only by Razorpay's signed webhook. A repeated webhook
-  does nothing. A parcel cannot be picked up before it is paid.
+- Payment goes through the razorpay_frappe app. When a Razorpay Order linked to a
+  Parcel becomes Paid, the Parcel is marked paid and gets its barcode token and
+  first event. A repeated confirmation does nothing, and a parcel cannot be
+  picked up before it is paid.
 - Scans are safe to repeat, and each scan locks the parcel row so two scans of
   the same parcel cannot collide.
 
@@ -108,7 +110,7 @@ Customers are normal Frappe users with the role Courier Customer.
 |---|---|
 | `courier/state_machine.py` | The table of legal steps and `decide()` |
 | `courier/scan.py` | Handles a scan, returns, failed delivery and hold |
-| `courier/signing.py` | Barcode token and webhook signature check |
+| `courier/signing.py` | Barcode token |
 | `courier/payment.py` | Razorpay order and payment confirmation |
 | `courier/api.py` | The endpoints the frontend and scanner call |
 | `courier/www/scan.html` | The agent scanner page (camera) |
@@ -120,15 +122,18 @@ Customers are normal Frappe users with the role Courier Customer.
     bench get-app https://github.com/sahil123-57/courier
     bench --site yoursite install-app courier
 
+Install the Razorpay app first, because this app needs it:
+
+    bench get-app https://github.com/bwhtech/razorpay_frappe --branch main
+    bench --site yoursite install-app razorpay_frappe
+
 Add to `sites/yoursite/site_config.json`:
 
-    "courier_secret": "a-long-random-string",
-    "razorpay_key_id": "rzp_test_xxx",
-    "razorpay_key_secret": "xxx",
-    "razorpay_webhook_secret": "xxx"
+    "courier_secret": "a-long-random-string"
 
-Point the Razorpay webhook (`payment.captured`, `order.paid`) to
-`https://yoursite/api/method/courier.api.razorpay_webhook`.
+Open Razorpay Settings in Desk and enter the Key ID, Key Secret and webhook secret.
+Point the Razorpay webhook (`payment.captured`) to
+`https://yoursite/razorpay-api/webhook-handler`.
 
 Run the frontend:
 
@@ -149,7 +154,8 @@ with the role Delivery Agent plus a Delivery Agent record linked to a hub.
 
 ## Not finished
 
-- Razorpay has been tested with a simulated webhook, not live test keys.
+- Razorpay checkout has not been tried with test keys. The payment hook is tested
+  with Razorpay Order records created in the tests.
   In developer mode with no keys, the app shows a "Simulate payment" button.
   That is for development only and must be removed before real use.
 - The frontend is run with the Vite dev server, not a production build.

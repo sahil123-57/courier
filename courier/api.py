@@ -1,9 +1,6 @@
-import json
-
 import frappe
 
 from courier import payment, pricing, scan
-from courier.signing import verify_webhook
 
 
 def login_required():
@@ -58,12 +55,12 @@ def book_parcel(data):
             }
         ).insert(ignore_permissions=True)
 
-    order_id = payment.create_order(parcel)
+    pay = payment.start_payment(parcel)
     return {
         "parcel": parcel.name,
         "amount": parcel.amount,
-        "order_id": order_id,
-        "key_id": frappe.conf.get("razorpay_key_id"),
+        "order_id": pay["order_id"],
+        "key_id": pay["key_id"],
     }
 
 
@@ -125,18 +122,6 @@ def scan_parcel(token, scan_type, proof=None):
     return scan.process_scan(token, scan_type, hub=agent_hub, proof=proof)
 
 
-@frappe.whitelist(allow_guest=True)
-def razorpay_webhook():
-    body = frappe.request.get_data()
-    signature = frappe.get_request_header("X-Razorpay-Signature")
-    if not verify_webhook(body, signature, frappe.conf.get("razorpay_webhook_secret")):
-        frappe.throw("Bad signature", frappe.AuthenticationError)
-
-    data = json.loads(body)
-    if data.get("event") in ("payment.captured", "order.paid"):
-        pay = data["payload"]["payment"]["entity"]
-        payment.mark_paid(pay["order_id"], pay["id"])
-    return "ok"
 @frappe.whitelist()
 def ops_action(name, action, reason=""):
     roles = frappe.get_roles()
@@ -151,5 +136,19 @@ def dev_simulate_payment(name):
     if not frappe.conf.get("developer_mode"):
         frappe.throw("Only available in developer mode")
     parcel = my_parcel(name)
-    payment.mark_paid(parcel.razorpay_order_id, "pay_simulated")
+    if parcel.payment_status == "Paid":
+        return "ok"
+    order = frappe.get_doc(
+        doctype="Razorpay Order",
+        order_id="order_sim_" + frappe.generate_hash(length=10),
+        amount=parcel.amount,
+        currency="INR",
+        status="Pending",
+        ref_dt="Parcel",
+        ref_dn=parcel.name,
+        meta_data="{}",
+    ).insert(ignore_permissions=True)
+    order.status = "Paid"
+    order.payment_id = "pay_simulated"
+    order.save(ignore_permissions=True)
     return "ok"

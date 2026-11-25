@@ -15,10 +15,3 @@ def read_token(token, secret):
     if not name or not hmac.compare_digest(sig, _sig(name, secret)):
         return None
     return name
-
-
-def verify_webhook(body, signature, secret):
-    if not secret:
-        return False
-    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature or "")
